@@ -1,0 +1,14 @@
+# Excluded Project Files
+layout-example/
+releases/
+
+# Arch Linux makepkg artifacts
+pkg/
+src/
+*.pkg.tar.zst
+*.pkg.tar.xz
+*.tar.gz
+
+# Python artifacts
+__pycache__/
+*.pyc

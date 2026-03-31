@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=CoKB-Keyboard
+Comment=On Screen Keyboard for Wayland
+Exec=cokb
+Icon=input-keyboard
+Terminal=false
+Type=Application
+Categories=Utility;Accessibility;

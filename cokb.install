@@ -1,0 +1,12 @@
+post_install() {
+    echo ":: Loading uinput kernel module..."
+    modprobe uinput || true
+
+    echo ":: Reloading udev rules..."
+    udevadm control --reload-rules
+    echo ":: NOTE: A system reboot may be required to grant the onscreen keyboard permissions."
+}
+
+post_upgrade() {
+    post_install
+}
