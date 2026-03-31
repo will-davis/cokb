@@ -1,4 +1,4 @@
-# Project: CachyOS On-Screen Keyboard (CoKB)
+# CachyOS On-Screen Keyboard (CoKB)
 <br>
 <div align="center">
   <img width="700" height="255" alt="CoKB-img" src="https://github.com/user-attachments/assets/dc4d6962-fded-414c-b4fb-4d230cf699c9" />
