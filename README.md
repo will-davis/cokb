@@ -1,9 +1,10 @@
 # CachyOS On-Screen Keyboard (CoKB)
 <br>
 <div align="center">
-  <img width="700" height="255" alt="CoKB-img" src="https://github.com/user-attachments/assets/dc4d6962-fded-414c-b4fb-4d230cf699c9" />
+  <img width="2043" height="712" alt="CoKB-2" src="https://github.com/user-attachments/assets/e4028048-0051-4ceb-b29b-271077388b51" />
 </div>
 <br>
+
 
 This repository was created after spending days trying to find a functional on screen keyboard for Arch and then CachyOS then eventually building my own with the features I wanted to have in an OSK. You can see more about the development in my linked blog post at the bottom.
 
