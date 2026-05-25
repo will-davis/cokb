@@ -1,5 +1,5 @@
 pkgname=cokb
-pkgver=1.1.0
+pkgver=1.2.0
 pkgrel=1
 pkgdesc="Onscreen Keyboard for CachyOS and Wayland using kernel level python-uinput and GTK4 Layer Shell"
 arch=('any')
