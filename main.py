@@ -14,12 +14,11 @@ except OSError:
 
 gi.require_version('Gtk', '4.0')
 gi.require_version('Gtk4LayerShell', '1.0')
-from gi.repository import Gtk, Gdk, Gtk4LayerShell
+from gi.repository import Gtk, Gdk, GLib, Gtk4LayerShell
 
 class WaylandOSK(Gtk.Application):
     MAIN_TOP = [
         ("Esc", uinput.KEY_ESC, 4, "mod"), ("EXIT", None, 4, "exit"),
-        ("Blank", None, 2, ""),
         ("F1", uinput.KEY_F1, 4, ""), ("F2", uinput.KEY_F2, 4, ""), ("F3", uinput.KEY_F3, 4, ""), ("F4", uinput.KEY_F4, 4, ""),
         ("Blank", None, 2, ""),
         ("F5", uinput.KEY_F5, 4, ""), ("F6", uinput.KEY_F6, 4, ""), ("F7", uinput.KEY_F7, 4, ""), ("F8", uinput.KEY_F8, 4, ""),
@@ -109,9 +108,15 @@ class WaylandOSK(Gtk.Application):
         css_provider.load_from_data(b"""
         .keyboard-frame {
             background-color: #1a1a1b;
-            padding: 12px;
-            border-radius: 12px;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+            padding: 2px;
+        }
+        .grip-bar {
+            background-color: #2a2a2b;
+            border-radius: 4px;
+            min-height: 10px;
+        }
+        .grip-bar:hover {
+            background-color: #3e3e40;
         }
         button {
             transition: all 0.1s ease-in-out;
@@ -121,15 +126,12 @@ class WaylandOSK(Gtk.Application):
             margin: 0px;
             background-color: #2d2d2e;
             color: #e2e2e2;
-            border-bottom: 3px solid #111;
             border-radius: 6px;
             font-size: 11px;
             font-weight: 600;
         }
         button:hover {
             transform: scale(1.05);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-            z-index: 10;
         }
         button:active {
             transform: scale(0.95);
@@ -137,21 +139,14 @@ class WaylandOSK(Gtk.Application):
         button.mod {
             background-color: #3e3e40;
         }
-        button.ctrl {
+        button.ctrl, button.ctrl-half {
             background-color: #1f2638;
-            border-bottom-color: #10131c;
-        }
-        button.ctrl-half {
-            background-color: #1f2638;
-            border-bottom-color: #10131c;
         }
         button.exit {
             background-color: #4c2e2e;
-            border-bottom-color: #2b1414;
         }
         button.modifier-locked {
             background-color: #3584e4;
-            border-bottom-color: #1b4d8f;
             color: white;
         }
         .scale-3 button { font-size: 13px; }
@@ -169,16 +164,15 @@ class WaylandOSK(Gtk.Application):
         Gtk4LayerShell.set_keyboard_mode(window, Gtk4LayerShell.KeyboardMode.NONE)
         Gtk4LayerShell.set_layer(window, Gtk4LayerShell.Layer.TOP)
         Gtk4LayerShell.set_anchor(window, Gtk4LayerShell.Edge.BOTTOM, True)
+        Gtk4LayerShell.set_anchor(window, Gtk4LayerShell.Edge.LEFT, True)
 
-        main_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        main_vbox.set_margin_start(10); main_vbox.set_margin_end(10)
-        main_vbox.set_margin_top(10); main_vbox.set_margin_bottom(10)
+        main_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         main_vbox.add_css_class("keyboard-frame")
         self.main_vbox = main_vbox
 
         self.all_keys = []
         self.all_grids = []
-        self.scale_level = 3
+        self.scale_level = 2
         self.caps_locked = False
 
         def attach_btn(grid, col, row, span, label, keycode, css_class, type_="full", pos_code=None):
@@ -216,51 +210,59 @@ class WaylandOSK(Gtk.Application):
             grid.attach(btn, col, row, span, 1)
             self.all_keys.append({"btn": btn, "label": label, "span": span, "type": type_})
 
-        # Top Region
-        top_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=24)
+        # Grip bar for drag-to-reposition
+        grip = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        grip.set_size_request(-1, 10)
+        grip.add_css_class("grip-bar")
+        drag_gesture = Gtk.GestureDrag.new()
+        drag_gesture.connect("drag-begin", self.on_drag_begin)
+        drag_gesture.connect("drag-update", self.on_drag_update)
+        grip.add_controller(drag_gesture)
+        main_vbox.append(grip)
 
-        main_top_grid = Gtk.Grid()
-        self.all_grids.append(main_top_grid)
+        # Main content: single hbox with main_grid + edit_grid
+        content_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=24)
+
+        # Main grid: function row (row 0) + keyboard rows (rows 1-5)
+        main_grid = Gtk.Grid()
+        self.all_grids.append(main_grid)
+
         col = 0
         for label, keycode, span, css_class in self.MAIN_TOP:
-            attach_btn(main_top_grid, col, 0, span, label, keycode, css_class)
+            attach_btn(main_grid, col, 0, span, label, keycode, css_class)
             col += span
-        top_hbox.append(main_top_grid)
 
-        edit_top_grid = Gtk.Grid()
-        self.all_grids.append(edit_top_grid)
-        for label, pos_code, c, r, span, css_class in self.EDIT_TOP:
-            attach_btn(edit_top_grid, c, r, span, label, None, css_class, "half", pos_code)
-        top_hbox.append(edit_top_grid)
-
-        main_vbox.append(top_hbox)
-
-        # Bot Region
-        bot_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=24)
-
-        main_bot_grid = Gtk.Grid()
-        self.all_grids.append(main_bot_grid)
         for r_idx, row in enumerate(self.MAIN_BOT):
             col = 0
             for label, keycode, span, css_class in row:
-                attach_btn(main_bot_grid, col, r_idx, span, label, keycode, css_class)
+                attach_btn(main_grid, col, r_idx + 1, span, label, keycode, css_class)
                 col += span
-        bot_hbox.append(main_bot_grid)
 
-        edit_bot_grid = Gtk.Grid()
-        self.all_grids.append(edit_bot_grid)
+        content_hbox.append(main_grid)
+
+        # Edit grid: snap buttons (nested sub-grid in row 0) + nav rows (rows 1-5)
+        edit_grid = Gtk.Grid()
+        self.all_grids.append(edit_grid)
+
+        snap_grid = Gtk.Grid()
+        self.all_grids.append(snap_grid)
+        for label, pos_code, c, r, span, css_class in self.EDIT_TOP:
+            attach_btn(snap_grid, c, r, span, label, None, css_class, "half", pos_code)
+        edit_grid.attach(snap_grid, 0, 0, 12, 1)
+
         for r_idx, row in enumerate(self.EDIT_BOT):
             col = 0
             for label, keycode, span, css_class in row:
-                attach_btn(edit_bot_grid, col, r_idx, span, label, keycode, css_class)
+                attach_btn(edit_grid, col, r_idx + 1, span, label, keycode, css_class)
                 col += span
-        bot_hbox.append(edit_bot_grid)
 
-        main_vbox.append(bot_hbox)
+        content_hbox.append(edit_grid)
+        main_vbox.append(content_hbox)
 
         self.change_scale(0)
 
         window.set_child(main_vbox)
+        window.connect("map", lambda w: GLib.idle_add(self._initial_position, w))
         window.present()
 
     def change_scale(self, direction):
@@ -329,46 +331,55 @@ class WaylandOSK(Gtk.Application):
                     if base_label in self.SHIFT_MAP:
                         btn.set_label(base_label)
 
+    def _initial_position(self, window):
+        if window.get_width() > 1:
+            self.snap_to_corner(window, "br")
+            return GLib.SOURCE_REMOVE
+        return GLib.SOURCE_CONTINUE
+
+    def get_monitor_geometry(self):
+        display = Gdk.Display.get_default()
+        monitors = display.get_monitors()
+        return monitors.get_item(0).get_geometry()
+
     def snap_to_corner(self, window, corner):
-        if corner == "tl":
-            Gtk4LayerShell.set_anchor(window, Gtk4LayerShell.Edge.TOP, True)
-            Gtk4LayerShell.set_anchor(window, Gtk4LayerShell.Edge.LEFT, True)
-            Gtk4LayerShell.set_anchor(window, Gtk4LayerShell.Edge.BOTTOM, False)
-            Gtk4LayerShell.set_anchor(window, Gtk4LayerShell.Edge.RIGHT, False)
-        elif corner == "tc":
-            Gtk4LayerShell.set_anchor(window, Gtk4LayerShell.Edge.TOP, True)
-            Gtk4LayerShell.set_anchor(window, Gtk4LayerShell.Edge.LEFT, False)
-            Gtk4LayerShell.set_anchor(window, Gtk4LayerShell.Edge.BOTTOM, False)
-            Gtk4LayerShell.set_anchor(window, Gtk4LayerShell.Edge.RIGHT, False)
-        elif corner == "tr":
-            Gtk4LayerShell.set_anchor(window, Gtk4LayerShell.Edge.TOP, True)
-            Gtk4LayerShell.set_anchor(window, Gtk4LayerShell.Edge.RIGHT, True)
-            Gtk4LayerShell.set_anchor(window, Gtk4LayerShell.Edge.BOTTOM, False)
-            Gtk4LayerShell.set_anchor(window, Gtk4LayerShell.Edge.LEFT, False)
-        elif corner == "bl":
-            Gtk4LayerShell.set_anchor(window, Gtk4LayerShell.Edge.BOTTOM, True)
-            Gtk4LayerShell.set_anchor(window, Gtk4LayerShell.Edge.LEFT, True)
-            Gtk4LayerShell.set_anchor(window, Gtk4LayerShell.Edge.TOP, False)
-            Gtk4LayerShell.set_anchor(window, Gtk4LayerShell.Edge.RIGHT, False)
-        elif corner == "bc":
-            Gtk4LayerShell.set_anchor(window, Gtk4LayerShell.Edge.BOTTOM, True)
-            Gtk4LayerShell.set_anchor(window, Gtk4LayerShell.Edge.LEFT, False)
-            Gtk4LayerShell.set_anchor(window, Gtk4LayerShell.Edge.TOP, False)
-            Gtk4LayerShell.set_anchor(window, Gtk4LayerShell.Edge.RIGHT, False)
-        elif corner == "br":
-            Gtk4LayerShell.set_anchor(window, Gtk4LayerShell.Edge.BOTTOM, True)
-            Gtk4LayerShell.set_anchor(window, Gtk4LayerShell.Edge.RIGHT, True)
-            Gtk4LayerShell.set_anchor(window, Gtk4LayerShell.Edge.TOP, False)
-            Gtk4LayerShell.set_anchor(window, Gtk4LayerShell.Edge.LEFT, False)
+        geo = self.get_monitor_geometry()
+        kb_w = window.get_width()
+        kb_h = window.get_height()
+
+        left_positions = {"tl": 0, "bl": 0, "tc": (geo.width - kb_w) // 2, "bc": (geo.width - kb_w) // 2, "tr": geo.width - kb_w, "br": geo.width - kb_w}
+        bottom_positions = {"bl": 0, "bc": 0, "br": 0, "tl": geo.height - kb_h, "tc": geo.height - kb_h, "tr": geo.height - kb_h}
+
+        Gtk4LayerShell.set_margin(window, Gtk4LayerShell.Edge.LEFT, max(0, left_positions[corner]))
+        Gtk4LayerShell.set_margin(window, Gtk4LayerShell.Edge.BOTTOM, max(0, bottom_positions[corner]))
+
+    def on_drag_begin(self, gesture, start_x, start_y):
+        pass
+
+    def on_drag_update(self, gesture, offset_x, offset_y):
+        window = self.main_vbox.get_root()
+        geo = self.get_monitor_geometry()
+        kb_w = window.get_width()
+        kb_h = window.get_height()
+
+        current_left = Gtk4LayerShell.get_margin(window, Gtk4LayerShell.Edge.LEFT)
+        current_bottom = Gtk4LayerShell.get_margin(window, Gtk4LayerShell.Edge.BOTTOM)
+
+        new_left = current_left + int(offset_x)
+        new_bottom = current_bottom - int(offset_y)
+
+        new_left = max(0, min(new_left, geo.width - kb_w))
+        new_bottom = max(0, min(new_bottom, geo.height - kb_h))
+
+        Gtk4LayerShell.set_margin(window, Gtk4LayerShell.Edge.LEFT, new_left)
+        Gtk4LayerShell.set_margin(window, Gtk4LayerShell.Edge.BOTTOM, new_bottom)
 
     def on_key_clicked(self, button, key_code):
         if key_code in self.MODIFIER_KEYS:
             if key_code in self.locked_modifiers:
-                self.device.emit(key_code, 0)
                 button.remove_css_class("modifier-locked")
                 del self.locked_modifiers[key_code]
             else:
-                self.device.emit(key_code, 1)
                 button.add_css_class("modifier-locked")
                 self.locked_modifiers[key_code] = button
             self.update_key_labels()
@@ -379,18 +390,23 @@ class WaylandOSK(Gtk.Application):
                     button.add_css_class("modifier-locked")
                 else:
                     button.remove_css_class("modifier-locked")
-
                 self.device.emit_click(key_code)
                 self.update_key_labels()
                 return
 
-            self.device.emit_click(key_code)
-
             if self.locked_modifiers:
-                for mod_key, mod_button in self.locked_modifiers.items():
-                    self.device.emit(mod_key, 0)
+                for mod_key in self.locked_modifiers:
+                    self.device.emit(mod_key, 1, syn=False)
+                self.device.emit(key_code, 1, syn=True)
+                self.device.emit(key_code, 0, syn=False)
+                for mod_key in self.locked_modifiers:
+                    self.device.emit(mod_key, 0, syn=False)
+                self.device.syn()
+                for mod_button in self.locked_modifiers.values():
                     mod_button.remove_css_class("modifier-locked")
                 self.locked_modifiers.clear()
+            else:
+                self.device.emit_click(key_code)
 
             self.update_key_labels()
 
